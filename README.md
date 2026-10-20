@@ -6,7 +6,7 @@ A web-based editor for creating and managing data contracts using the [Open Data
 
 ## Features
 
-- **Open Data Contract Standard**: ODCS is the industry-standard for data contracts. Now with support for v3.1.0.
+- **Open Data Contract Standard**: ODCS is the industry-standard for data contracts. Now with support for v3.2.0.
 - **Editing Modes**:
   - **Visual Editor**: Define data models and relationships using a visual interface
   - **Form Editor**: Get guided input with a simple form interface
@@ -39,6 +39,9 @@ Or edit a data contract file directly:
 npx datacontract-editor mydatacontract.odcs.yaml
 ```
 
+A `customization.yaml` in the working directory (or a file referenced via `--customization` /
+`CUSTOMIZATION_CONFIG`) is applied automatically, see [CUSTOMIZATION.md](CUSTOMIZATION.md).
+
 
 
 ### Docker
@@ -53,11 +56,12 @@ Then open http://localhost:4173
 
 #### Configure AI Assistant
 
-The AI Assistant is disabled by default in Docker. To enable it, provide your own OpenAI-compatible endpoint:
+The AI Assistant is disabled by default in Docker. To enable it, set `AI_ENABLED=true` and provide your own OpenAI-compatible endpoint:
 
 **OpenAI:**
 ```bash
 docker run -d -p 4173:4173 \
+  -e AI_ENABLED=true \
   -e AI_ENDPOINT=https://api.openai.com/v1/chat/completions \
   -e AI_API_KEY=sk-your-api-key \
   -e AI_MODEL=gpt-4o \
@@ -67,6 +71,7 @@ docker run -d -p 4173:4173 \
 **Azure OpenAI:**
 ```bash
 docker run -d -p 4173:4173 \
+  -e AI_ENABLED=true \
   -e AI_ENDPOINT=https://your-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview \
   -e AI_API_KEY=your-azure-key \
   -e AI_AUTH_HEADER=api-key \
@@ -76,6 +81,7 @@ docker run -d -p 4173:4173 \
 **Local LLM (Ollama):**
 ```bash
 docker run -d -p 4173:4173 \
+  -e AI_ENABLED=true \
   -e AI_ENDPOINT=http://host.docker.internal:11434/v1/chat/completions \
   -e AI_API_KEY=ollama \
   -e AI_MODEL=llama3.2 \
@@ -84,10 +90,12 @@ docker run -d -p 4173:4173 \
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `AI_ENABLED` | Enable the AI assistant | `false` |
 | `AI_ENDPOINT` | OpenAI-compatible chat completions URL | Hosted API |
 | `AI_API_KEY` | API key for authentication | Hosted API |
 | `AI_MODEL` | Model name | `gpt-4o` |
 | `AI_AUTH_HEADER` | Auth header: `bearer` or `api-key` | `bearer` |
+| `CUSTOMIZATION_CONFIG` | Path to a mounted `customization.yaml` ([docs](CUSTOMIZATION.md)) | - |
 
 
 ### Data Contract CLI

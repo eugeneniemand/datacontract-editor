@@ -20,6 +20,8 @@ const HamburgerIcon = () => (
 const LANGUAGES = [
 	{ code: 'en', label: 'English' },
 	{ code: 'de', label: 'Deutsch' },
+	{ code: 'sv', label: 'Svenska' },
+	{ code: 'fr', label: 'Français' },
 ];
 
 const Header = () => {
@@ -457,11 +459,13 @@ const Header = () => {
 								</defs>
 							</svg>
 							<div className="flex flex-col min-w-0">
-								<span className="text-md leading-tight text-gray-900">
-													{editorConfig.titlePrefix
-														? `${editorConfig.titlePrefix} ${contractName}`
-														: 'Data Contract Editor'}
+								<div className="flex items-center gap-2 min-w-0">
+									<span className="text-md leading-tight text-gray-900 truncate">
+														{editorConfig.titlePrefix
+															? `${editorConfig.titlePrefix} ${contractName}`
+															: 'Data Contract Editor'}
 									</span>
+								</div>
 								{editorConfig.filePath && (
 									<span className="text-xs leading-tight text-gray-500 truncate" title={editorConfig.filePath}>
 										{editorConfig.filePath}

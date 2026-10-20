@@ -7,12 +7,15 @@ import { DEFAULT_AI_CONFIG, DEFAULT_TESTS_CONFIG } from './config/defaults.js';
 import { getStorageConfig } from './utils/persistence.js';
 import { isSafeKey } from './utils/safeProperty.js';
 import { createAuthoritativeDefinitionsSlice, initialAuthoritativeDefinitionsState } from './lib/authoritativeDefinitionsSlice.js';
+import { createAutoValuesSlice } from './lib/autoValuesSlice.js';
 import { createBrowsePanelSlice } from './components/browse/browsePanelSlice.js';
+import { createTestActions } from './services/testRunner.js';
+import { viewSwitch } from './lib/viewSwitch.js';
 
 // Storage backend instance - can be set via setFileStorageBackend
 let fileStorageBackend = new LocalFileStorageBackend();
 
-export const initialYaml = 'apiVersion: "v3.1.0"\nkind: "DataContract"\nid: "example-id"\nversion: "0.0.1"\nstatus: "draft"\nname: "Example Data Contract"\n';
+export const initialYaml = 'apiVersion: "v3.2.0"\nkind: "DataContract"\nid: "example-id"\nversion: "0.0.1"\nstatus: "draft"\nname: "Example Data Contract"\n';
 
 /**
  * Set the file storage backend to use for the editor
@@ -121,6 +124,7 @@ export function defaultStoreConfig(set, get) {
 				const yamlParts = Yaml.parse(newYaml);
 				set({yaml: newYaml, baselineYaml: newYaml, isDirty: false, yamlParts, yamlParseError: null, yamlParseErrorPos: null});
 				get().collectAndFetchAuthoritativeDefinitions();
+        // eslint-disable-next-line no-unused-vars
 			} catch(e) {
 				// NOOP
 			}
@@ -187,108 +191,7 @@ export function defaultStoreConfig(set, get) {
 		closeAiPanel: () => set({ isAiPanelOpen: false }),
 		resetAiChat: () => set((state) => ({ aiChatResetKey: (state.aiChatResetKey || 0) + 1, aiChatHasMessages: false })),
 		setAiChatHasMessages: (hasMessages) => set({ aiChatHasMessages: hasMessages }),
-		runTest: async (server) => {
-			const {yaml, editorConfig} = get();
-			set({isTestRunning: true});
-			try {
-				// Build the test endpoint URL
-				const baseUrl = editorConfig?.tests?.dataContractCliApiServerUrl || 'https://api.datacontract.com';
-				const testEndpoint = `${baseUrl}/test`;
-				const url = server ? `${testEndpoint}?server=${encodeURIComponent(server)}` : testEndpoint;
-
-				// Build headers with optional API key
-				const headers = {
-					'Content-Type': 'text/plain',
-				};
-				if (editorConfig?.tests?.apiKey) {
-					headers['X-API-KEY'] = editorConfig.tests.apiKey;
-				}
-
-				const response = await fetch(url, {
-					method: 'POST',
-					headers,
-					body: yaml,
-				});
-
-				// Check if response status is OK
-				if (!response.ok) {
-					let errorMessage = `Server returned error: ${response.status} ${response.statusText}`;
-
-					// Try to parse error response as JSON
-					try {
-						const errorData = await response.json();
-						if (errorData.message) {
-							errorMessage = errorData.message;
-						} else if (errorData.error) {
-							errorMessage = errorData.error;
-						}
-					} catch {
-						// If JSON parsing fails, try to get text
-						try {
-							const errorText = await response.text();
-							if (errorText) {
-								errorMessage = errorText;
-							}
-						} catch {
-							// Keep the default error message
-						}
-					}
-
-					throw new Error(errorMessage);
-				}
-
-				// Parse successful response
-				const result = await response.json();
-
-				// Determine success from response data's result field
-				let success = false;
-				if (result.result) {
-					// Use the result field from the response
-					success = result.result === 'passed' || result.result === 'pass';
-				} else if (Array.isArray(result.checks)) {
-					// Fallback: check if any checks failed
-					const hasFailures = result.checks.some(check =>
-						check.result === 'failed' || check.result === 'fail' || check.result === false
-					);
-					success = !hasFailures;
-				}
-
-				const newResult = {
-					timestamp: new Date().toISOString(),
-					success: success,
-					data: result,
-				};
-
-				// Keep only the current result (no history)
-				set({testResults: [newResult], isTestRunning: false});
-
-				return newResult;
-			} catch (error) {
-				// Provide better error messages for common issues
-				let errorMessage = error.message;
-				let isConnectionError = false;
-
-				if (error.name === 'TypeError' && error.message.includes('fetch')) {
-					const displayUrl = editorConfig?.tests?.dataContractCliApiServerUrl || 'https://api.datacontract.com';
-					errorMessage = `Cannot connect to Data Contract CLI at ${displayUrl}.`;
-					isConnectionError = true;
-				} else if (error.message === 'Unexpected end of JSON input' || error.message.includes('JSON')) {
-					errorMessage = 'Test server returned an invalid response. The server may be misconfigured or not responding correctly.';
-				}
-
-				const errorResult = {
-					timestamp: new Date().toISOString(),
-					success: false,
-					error: errorMessage,
-					isConnectionError: isConnectionError,
-				};
-
-				// Keep only the current result (no history)
-				set({testResults: [errorResult], isTestRunning: false});
-
-				throw error;
-			}
-		},
+		...createTestActions(set, get, (editorConfig) => editorConfig?.tests?.dataContractCliApiServerUrl || 'https://api.datacontract.com'),
 		clearTestResults: () => set({testResults: []}),
 		setMarkers: (markers) => set({markers}),
 		// AI pending change actions
@@ -311,7 +214,7 @@ export function defaultStoreConfig(set, get) {
 			}
 		},
 		clearLastAppliedAiChange: () => set({ lastAppliedAiChange: null }),
-		setView: (view) => set({currentView: view}),
+		setView: (view) => set((state) => viewSwitch(state, view)),
 		setSelectedDiagramSchemaIndex: (index) => set({selectedDiagramSchemaIndex: index}),
 		setSchemaInfo: (schemaUrl, schemaData) => set({schemaUrl, schemaData}),
 		loadFromFile: async (filename = null) => {
@@ -391,6 +294,7 @@ export function defaultStoreConfig(set, get) {
 		isPreviewVisible: true,
 		isWarningsVisible: false,
 		isTestResultsVisible: false,
+		rightPaneBeforeDiagram: null, // right pane hidden on entering the diagram, restored on leaving it
 		isTestRunning: false,
 		testResults: [],
 		markers: [],
@@ -398,6 +302,7 @@ export function defaultStoreConfig(set, get) {
 		yamlParseErrorPos: null,
 		pendingScrollToPos: null,
 		currentView: 'form', // 'yaml' or 'form'
+		odcsVersions: null, // [{ version, schema, default }] from the host; null = built-in default (schemaRegistry.js)
 		schemaUrl: null,
 		schemaData: null,
 		yamlCursorLine: 1,
@@ -416,6 +321,8 @@ export function defaultStoreConfig(set, get) {
 			ai: DEFAULT_AI_CONFIG,
 			semantics: null, // { baseUrl, pageParam, queryParam, definitionAcceptHeader, batchResolveUrl } for the semantic ontology tree API; when semantics.batchResolveUrl is set, authoritativeDefinitions are batch-fetched on load
 			dataProducts: null, // { upstreamUrl, productsUrl, contractsBaseUrl } for the data products browse panel
+			assets: null, // { url, catalogUrl, assetDetailsUrlTemplate } for the assets browse panel
+			autoValues: null, // { url } deriving the values of custom properties configured with `auto: true`
       managedTags: [], // [{tag: 'tag1', href: 'https://...'}, ...]
       allowUnmanagedTags: true,
 			customizations: null, // See CUSTOMIZATION.md for documentation
@@ -426,6 +333,7 @@ export function defaultStoreConfig(set, get) {
 		pendingAiChange: null, // { updatedYaml, summary, validationErrors, isValid }
 		lastAppliedAiChange: null, // { originalYaml, summary } - for unapply
 		...authoritativeDefinitionsSlice,
+		...createAutoValuesSlice(set, get),
 		...createBrowsePanelSlice(set),
 		...actions,
 	};
@@ -442,7 +350,7 @@ const defaultEditorStore = create()(
 		? persist(defaultStoreConfig, {
 			name: 'editor-store',
 			storage: storageConfig,
-			partialize: ({ authoritativeDefinitions, ...rest }) => rest, // eslint-disable-line no-unused-vars
+			partialize: ({ authoritativeDefinitions, autoValues, isTestRunning, ...rest }) => rest, // eslint-disable-line no-unused-vars
 			merge: (persistedState, currentState) => {
 				// Deep merge editorConfig, ensuring empty strings don't override build-time defaults
 				const persistedAi = persistedState?.editorConfig?.ai || {};
@@ -467,6 +375,8 @@ const defaultEditorStore = create()(
 					...currentState,
 					...persistedState,
 					editorConfig: mergedEditorConfig,
+					// a test cannot survive a reload, so never restore a running test
+					isTestRunning: false,
 					authoritativeDefinitions: { ...initialAuthoritativeDefinitionsState },
 				};
 			},
@@ -518,6 +428,21 @@ useEditorStore.getState = () => {
  * Update the editor configuration
  * @param {Object} config - Configuration object to merge with existing config
  */
+/**
+ * Applies the document settings of the standalone runtime config (see buildDocumentConfig).
+ * The schemas always follow the config. The initial data contract only replaces the built-in
+ * example, so a session that already holds the user's own contract keeps it on reload.
+ */
+export const applyDocumentConfig = ({ yaml, odcsVersions, schemaUrl } = {}) => {
+	const store = overrideStore || defaultEditorStore;
+	if (odcsVersions) {
+		store.setState({ odcsVersions, schemaUrl });
+	}
+	if (yaml && store.getState().yaml === initialYaml) {
+		store.getState().loadYaml(yaml);
+	}
+};
+
 export const setEditorConfig = (config) => {
 	const store = overrideStore || defaultEditorStore;
 	const currentConfig = store.getState().editorConfig;

@@ -11,13 +11,35 @@
     "sla": "SLA",
     "customProperties": "Benutzerdefinierte Eigenschaften",
     "footer": {
-      "documentation": "Dokumentation"
-    }
+      "documentation": "Dokumentation",
+      "createdBy": "Erstellt von Entropy Data"
+    },
+    "context": "Kontext"
   },
   "overview": {
     "section": {
       "fundamentals": "Grundlagen",
       "fundamentalsDescription": "Kernmetadaten zur Identifikation des Data Contracts, darunter Name, Version, Status und organisatorischer Kontext."
+    },
+    "apiVersion": {
+      "label": "ODCS-Version (apiVersion)",
+      "placeholder": "ODCS-Version auswählen...",
+      "tooltip": "Version des Open Data Contract Standard, in der dieser Data Contract geschrieben ist (apiVersion). Wählbar sind nur die aktuelle und neuere Versionen; eine Aktualisierung migriert das Dokument dort, wo sich der Standard strukturell geändert hat, und lässt die eigene Version des Data Contracts unverändert.",
+      "behind": "Ihre Organisation hat ODCS {{target}} als Standard konfiguriert.",
+      "migrate": "Auf {{target}} migrieren",
+      "confirm": {
+        "title": "Auf ODCS {{target}} migrieren",
+        "why": "Dieser Data Contract deklariert ODCS {{current}}, Ihre Organisation verwendet {{target}}. Felder, die der Standard in {{target}} hinzugefügt hat, bleiben ausgeblendet, bis der Data Contract diese Version deklariert.",
+        "whatOnlyVersion": "Die Migration setzt apiVersion auf {{target}}. Diese Version erfordert keine strukturellen Änderungen, sonst wird nichts im Dokument angefasst.",
+        "whatWithSteps": "Die Migration setzt apiVersion auf {{target}} und wendet die strukturellen Änderungen an, die diese Version erfordert:",
+        "steps": {
+          "teamMembers": "Die einfache Team-Liste wird zum Team-Objekt mit einer Mitgliederliste."
+        },
+        "note": "Die eigene Version des Data Contracts und sein Inhalt bleiben unverändert; ob die neue Standard-Version eine Erhöhung der Contract-Version rechtfertigt, entscheiden Sie. Die Migration lässt sich wie jede andere Änderung rückgängig machen.",
+        "migrate": "Migrieren",
+        "dismiss": "Nicht jetzt"
+      },
+      "sectionLocked": "Erfordert eine neuere ODCS-Version. Aktualisierung über die ODCS-Version unter Fundamentals."
     },
     "name": {
       "label": "Name",
@@ -230,7 +252,13 @@
       "tooltip": "Menschenlesbare Erläuterung",
       "placeholder": "Menschenlesbare Erläuterung..."
     },
-    "add": "+ SLA hinzufügen"
+    "add": "+ SLA hinzufügen",
+    "customPropertiesField": {
+      "label": "Custom Properties"
+    },
+    "authoritativeDefinitionsField": {
+      "label": "Maßgebliche Definitionen"
+    }
   },
   "ai": {
     "fab": {
@@ -298,6 +326,10 @@
   "diagram": {
     "clickToEdit": "Zum Bearbeiten klicken",
     "confirmDeleteProperty": "Möchtest du diese Eigenschaft wirklich löschen?",
+    "confirmDeleteSchema": "Möchtest du das Schema \"{{name}}\" wirklich löschen?",
+    "confirmDeleteSchemas": "Möchtest du wirklich {{count}} Schemas löschen?",
+    "confirmDeleteRelationship_one": "Möchtest du diese Beziehung wirklich löschen?",
+    "confirmDeleteRelationship_other": "Möchtest du wirklich {{count}} Beziehungen löschen?",
     "layingOut": "Wird angeordnet…",
     "noTypeConstraints": "Für {{type}} sind keine typspezifischen Einschränkungen verfügbar.",
     "thisType": "diesen Typ",
@@ -323,10 +355,12 @@
     },
     "help": {
       "title": "Schnelltipps:",
-      "editNames": "Klicke auf Schema- oder Eigenschaftsnamen, um sie zu bearbeiten",
+      "editNames": "Klicke auf einen Namen, um ihn auszuwählen, und klicke erneut darauf, um ihn umzubenennen",
       "clickDetails": "Klicke auf Eigenschaften, um Details im Bereich anzuzeigen",
       "dragLink": "Ziehe von einem Punkt an einer Eigenschaft zu einem Punkt an einer anderen, um sie zu verbinden",
       "dragReposition": "Ziehe Knoten, um sie neu zu positionieren, oder nutze das automatische Layout",
+      "reorder": "Ziehe eine Eigenschaft an ihrem Typ-Symbol, um die Reihenfolge der Felder zu ändern",
+      "deselect": "Drücke Esc oder klicke auf eine freie Stelle, um die Auswahl aufzuheben",
       "collapse": "Klappe eine Tabelle mit dem Listensymbol in der Kopfzeile auf nur Schlüssel zusammen oder alle Tabellen mit dem Symbolleisten-Button",
       "zoom": "Nutze das Mausrad zum Zoomen",
       "shortcutsPrefix": "Drücke",
@@ -348,14 +382,28 @@
       "description": "Lege los, indem du dein erstes Schema erstellst."
     },
     "edge": {
-      "schemaLevel": "Beziehung auf Schemaebene — nur im Formular-Editor bearbeitbar"
+      "schemaLevel": "Beziehung auf Schemaebene — nur im Formular-Editor bearbeitbar",
+      "grouped_one": "{{count}} Beziehung — klicken, um jede einzeln anzuzeigen",
+      "grouped_other": "{{count}} Beziehungen — klicken, um jede einzeln anzuzeigen",
+      "cardinality": {
+        "one": "1 — jede Zeile verweist auf genau eine Zeile (Fremdschlüssel ist eindeutig und Pflicht)",
+        "zeroOrOne": "? — jede Zeile verweist auf keine oder eine Zeile (Fremdschlüssel ist eindeutig, aber optional)",
+        "many": "n — viele Zeilen können auf dieselbe Zeile verweisen (Fremdschlüssel ist nicht eindeutig)"
+      }
     },
     "schema": {
       "addProperty": "Eigenschaft hinzufügen",
       "moreOptions": "Weitere Optionen",
       "delete": "Schema löschen",
       "unnamed": "Unbenanntes Schema",
-      "noProperties": "Keine Eigenschaften definiert"
+      "noProperties": "Keine Eigenschaften definiert",
+      "kind": {
+        "fact": "Fakt",
+        "factHint": "Faktentabelle (fct_): enthält Kennzahlen zu Geschäftsereignissen",
+        "dimension": "Dimension",
+        "dimensionHint": "Dimensionstabelle (dim_): enthält beschreibende Attribute zum Auswerten der Fakten"
+      },
+      "selectToRename": "Klicke, um die Tabelle auszuwählen, dann klicke erneut auf den Namen, um sie umzubenennen"
     },
     "handle": {
       "source": "Ziehe von hier zu einer Eigenschaft einer anderen Tabelle, um eine Beziehung zu erstellen",
@@ -368,7 +416,8 @@
       "dragToReorder": "Zum Umsortieren ziehen",
       "addNested": "Verschachtelte Eigenschaft hinzufügen",
       "delete": "Löschen",
-      "deleteProperty": "Eigenschaft löschen"
+      "deleteProperty": "Eigenschaft löschen",
+      "selectToRename": "Klicke, um die Eigenschaft auszuwählen, dann klicke erneut auf den Namen, um sie umzubenennen"
     },
     "propertyDetails": {
       "title": "Eigenschaft bearbeiten",
@@ -385,7 +434,9 @@
       "dataQuality": "Datenqualität",
       "authoritativeDefinitions": "Maßgebliche Definitionen",
       "relationships": "Beziehungen",
-      "customProperties": "Benutzerdefinierte Eigenschaften"
+      "customProperties": "Benutzerdefinierte Eigenschaften",
+      "enumValues": "Erlaubte Werte",
+      "synonyms": "Synonyme"
     },
     "semantics": {
       "semanticConcept": "Semantic Concept",
@@ -518,6 +569,33 @@
         "label": "Transformationsbeschreibung",
         "placeholder": "Fachlich verständliche Erklärung der Transformation...",
         "help": "Nicht-technische Beschreibung, wie das Feld abgeleitet wird"
+      },
+      "semanticType": {
+        "label": "Semantischer Typ"
+      },
+      "deprecated": {
+        "label": "Veraltet"
+      },
+      "mapKeyType": {
+        "label": "Map-Schlüsseltyp"
+      },
+      "mapValueType": {
+        "label": "Map-Werttyp"
+      },
+      "vectorDimensions": {
+        "label": "Dimensionen"
+      },
+      "vectorElementType": {
+        "label": "Elementtyp"
+      },
+      "vectorDistanceMetric": {
+        "label": "Distanzmetrik"
+      },
+      "vectorEmbeddingModel": {
+        "label": "Embedding-Modell"
+      },
+      "vectorNormalized": {
+        "label": "Normalisiert"
       }
     },
     "option": {
@@ -526,6 +604,14 @@
       "false": "Falsch",
       "true": "Wahr",
       "select": "Auswählen..."
+    },
+    "selection": {
+      "table_one": "Tabelle ausgewählt",
+      "table_other": "{{count}} Tabellen ausgewählt",
+      "relationship_one": "Beziehung ausgewählt",
+      "relationship_other": "{{count}} Beziehungen ausgewählt",
+      "delete": "zum Löschen",
+      "deselect": "oder Klick auf freie Fläche zum Abwählen"
     }
   },
   "testResults": {
@@ -538,6 +624,8 @@
     "server": "Server",
     "serverLabel": "Server: {{server}}",
     "running": "Test läuft gerade...",
+    "cancel": "Abbrechen",
+    "cancelTitle": "Laufenden Test abbrechen",
     "runTest": "Test ausführen",
     "runVia": "Tests ausführen über:",
     "clear": "Leeren",
@@ -567,7 +655,11 @@
       "subtitle": "Dein YAML ist gültig, ohne Fehler oder Warnungen."
     },
     "problems": "Probleme ({{count}})",
-    "lineColumn": "Zeile {{line}}, Spalte {{column}}"
+    "lineColumn": "Zeile {{line}}, Spalte {{column}}",
+    "apiVersion": {
+      "document": "Dokument {{version}}",
+      "schema": "Schema-Standard {{version}}"
+    }
   },
   "rolesList": {
     "accessRoles": "Zugriffsrollen",
@@ -658,11 +750,22 @@
       "all": "Alle Datenprodukte",
       "noContracts": "Keine Data Contracts"
     },
+    "assets": {
+      "title": "Assets",
+      "noServers": "Füge einen Server hinzu, um die darauf verfügbaren Assets zu sehen",
+      "noAssets": "Keine Assets auf diesem Server gefunden",
+      "error": "Assets konnten nicht geladen werden",
+      "minQuery": "Gib mindestens 3 Zeichen ein, um zu suchen",
+      "truncated": "Es gibt weitere Assets. Suche nach dem Asset, das du brauchst.",
+      "noCatalogAssets": "Keine Assets gefunden"
+    },
     "kind": {
       "product": "Datenprodukt",
       "contract": "Output Port",
       "schema": "Tabelle",
-      "property": "Eigenschaft"
+      "property": "Eigenschaft",
+      "server": "Server",
+      "asset": "Asset"
     },
     "semanticKind": {
       "namespace": "Namespace",
@@ -683,7 +786,8 @@
       "yes": "ja",
       "classification": "Klassifizierung",
       "examples": "Beispiele",
-      "businessName": "Business Name"
+      "businessName": "Business Name",
+      "qualifiedName": "Qualifizierter Name"
     },
     "linkedTo": "Verknüpft im Data Contract: {{properties}}",
     "search": "Suchen...",
@@ -735,7 +839,9 @@
     "maxValue": "Maximalwert ist {{max}}",
     "selectOption": "Option auswählen...",
     "typeToEnter": "Tippe, um einen Wert einzugeben, oder wähle aus den Optionen",
-    "noOptions": "Keine Optionen verfügbar"
+    "noOptions": "Keine Optionen verfügbar",
+    "overrideInherited": "Überschreiben",
+    "overrideInheritedTooltip": "Geerbten Wert in dieses Feld kopieren, um ihn anzupassen"
   },
   "quality": {
     "label": "Qualitätsregel",
@@ -849,6 +955,7 @@
     "remove": "Entfernen",
     "from": "Von",
     "to": "Nach",
+    "targetNotFound": "Ziel nicht gefunden: In diesem Data Contract gibt es noch keine Eigenschaft mit dieser Referenz.",
     "removePair": "Paar entfernen",
     "addPair": "Spaltenpaar hinzufügen (zusammengesetzter Schlüssel)",
     "drawer": {
@@ -889,6 +996,14 @@
     "required": "Erforderlich",
     "select": "Auswählen…",
     "noOptions": "Keine Optionen verfügbar",
+    "auto": {
+      "label": "Auto",
+      "hint": "Automatisch abgeleitet",
+      "loading": "Wird geladen…",
+      "none": "Noch nichts abzuleiten",
+      "orPick": "Oder einen festen Wert setzen:",
+      "orPickMany": "Oder alle zutreffenden Werte wählen:"
+    },
     "boolean": {
       "notSet": "Nicht gesetzt",
       "false": "Falsch",
@@ -909,6 +1024,10 @@
       "edit": "Eigenschaft bearbeiten",
       "editNamed": "Eigenschaft bearbeiten: {{name}}",
       "close": "Panel schließen"
+    },
+    "vendor": {
+      "label": "Anbieter",
+      "placeholder": "z. B. entropy-data"
     }
   },
   "authDef": {
@@ -1014,6 +1133,15 @@
         "label": "Tags",
         "tooltip": "Tags zum Kategorisieren und Organisieren von Schema",
         "placeholder": "Tag hinzufügen..."
+      },
+      "deprecated": {
+        "label": "Veraltet"
+      },
+      "synonyms": {
+        "label": "Synonyme"
+      },
+      "context": {
+        "label": "Kontext"
       }
     },
     "advancedMetadata": "Erweiterte Metadaten",
@@ -1148,6 +1276,13 @@
     "dragToResize": "Zum Anpassen ziehen"
   },
   "preview": {
+    "context": {
+      "heading": "Kontext",
+      "description": "Hinweise für Konsumenten und KI-Agenten",
+      "instructions": "Anweisungen",
+      "verifiedStatements": "Verifizierte Aussagen",
+      "constraints": "Einschränkungen"
+    },
     "fundamentals": {
       "heading": "Grundlagen",
       "description": "Informationen zum Data Contract",
@@ -1175,7 +1310,8 @@
       "access": "Zugriff",
       "firstLevelApprovers": "Genehmiger erste Ebene",
       "secondLevelApprovers": "Genehmiger zweite Ebene",
-      "customProperties": "Benutzerdefinierte Eigenschaften"
+      "customProperties": "Benutzerdefinierte Eigenschaften",
+      "roleDescription": "Beschreibung"
     },
     "schema": {
       "heading": "Schema",
@@ -1219,7 +1355,42 @@
       "mustBeGreaterThan": "Muss > {{value}} sein",
       "mustBeLessThan": "Muss < {{value}} sein",
       "mustBe": "Muss {{value}} sein",
-      "qualityCheck": "Qualitätsprüfung"
+      "qualityCheck": "Qualitätsprüfung",
+      "dimensions": "Dimensionen: {{value}}",
+      "elementType": "Elementtyp: {{value}}",
+      "distanceMetric": "Distanzmetrik: {{value}}",
+      "normalized": "Normalisiert: {{value}}",
+      "embeddingModel": "Embedding-Modell: {{value}}",
+      "embeddingModelVersion": "Embedding-Modell-Version: {{value}}",
+      "itemsDescription": "Einträge: {{value}}",
+      "mapKeyType": "Schlüsseltyp: {{value}}",
+      "mapKeyDescription": "Schlüssel: {{value}}",
+      "mapValueType": "Werttyp: {{value}}",
+      "mapValueDescription": "Wert: {{value}}",
+      "qualityRule": "Regel: {{value}}",
+      "qualityArguments": "Argumente: {{value}}",
+      "qualityQuery": "Abfrage: {{value}}",
+      "qualityEngine": "Engine: {{value}}",
+      "qualityImplementation": "Implementierung: {{value}}",
+      "qualitySeverity": "Schweregrad: {{value}}",
+      "qualityBusinessImpact": "Geschäftliche Auswirkung: {{value}}",
+      "qualityMethod": "Methode: {{value}}",
+      "qualitySchedule": "Zeitplan: {{value}}",
+      "qualityScheduler": "Scheduler: {{value}}",
+      "qualityUnit": "Einheit: {{value}}",
+      "qualityTags": "Tags: {{value}}",
+      "mustNotBe": "Darf nicht {{value}} sein",
+      "mustBeGreaterOrEqualTo": "Muss >= {{value}} sein",
+      "mustBeLessOrEqualTo": "Muss <= {{value}} sein",
+      "mustBeBetween": "Muss zwischen {{value}} liegen",
+      "mustNotBeBetween": "Darf nicht zwischen {{value}} liegen",
+      "enumValues": "Erlaubte Werte: {{value}}",
+      "synonyms": "Synonyme: {{value}}",
+      "deprecated": "veraltet",
+      "semanticType": "semantischer Typ: {{value}}",
+      "semanticTypeLabel": "Semantischer Typ",
+      "transformSourceObjects": "Quellobjekte:",
+      "granularity": "Granularität: {{value}}"
     },
     "servers": {
       "heading": "Server",
@@ -1250,7 +1421,8 @@
       "roles": "Rollen",
       "roleAccess": "Zugriff: {{access}}",
       "roleFirstLevelApprovers": "Genehmiger 1. Ebene: {{approvers}}",
-      "roleSecondLevelApprovers": "Genehmiger 2. Ebene: {{approvers}}"
+      "roleSecondLevelApprovers": "Genehmiger 2. Ebene: {{approvers}}",
+      "environment": "Umgebung"
     },
     "sla": {
       "heading": "Service Level Agreement (SLA)",
@@ -1262,7 +1434,10 @@
       "driver": "Treiber",
       "scheduler": "Scheduler",
       "schedule": "Zeitplan",
-      "description": "Beschreibung"
+      "description": "Beschreibung",
+      "valueExt": "Erweiterter Wert",
+      "customProperties": "Benutzerdefinierte Eigenschaften",
+      "authoritativeDefinitions": "Maßgebliche Definitionen"
     },
     "support": {
       "heading": "Support- & Kommunikationskanäle",
@@ -1272,7 +1447,8 @@
       "scope": "Scope",
       "description": "Beschreibung",
       "invitationUrl": "Einladungs-URL",
-      "invitation": "Einladung"
+      "invitation": "Einladung",
+      "customProperties": "Benutzerdefinierte Eigenschaften"
     },
     "team": {
       "heading": "Team",
@@ -1288,10 +1464,12 @@
     },
     "customProperties": {
       "heading": "Benutzerdefinierte Eigenschaften",
-      "description": "Dieser Abschnitt behandelt weitere Eigenschaften, die du in einem Data Contract finden kannst."
+      "description": "Dieser Abschnitt behandelt weitere Eigenschaften, die du in einem Data Contract finden kannst.",
+      "vendor": "Anbieter: {{value}}"
     },
     "contractHeader": {
-      "noData": "noch keine Daten"
+      "noData": "noch keine Daten",
+      "noTeam": "Kein Team"
     }
   },
   "app": {
@@ -1373,5 +1551,61 @@
   "typeSelector": {
     "use": "Verwenden:",
     "customValueHint": "Tippen, um einen eigenen Wert einzugeben"
+  },
+  "context": {
+    "heading": "Kontext",
+    "description": "Hinweise für KI-Agenten und Konsumenten dieses Data Contracts (ODCS 3.2.0)."
+  },
+  "contextEditor": {
+    "instructions": {
+      "label": "Anweisungen",
+      "placeholder": "Wie diese Daten genutzt, verknüpft und interpretiert werden sollen…"
+    },
+    "statements": {
+      "label": "Verifizierte Aussagen",
+      "help": "Fragen, die diese Daten zuverlässig beantworten, optional mit der verifizierten Antwort.",
+      "question": {
+        "placeholder": "Frage"
+      },
+      "answer": {
+        "placeholder": "Verifizierte Antwort (optional)"
+      },
+      "add": "+ Aussage hinzufügen",
+      "remove": "Aussage entfernen"
+    },
+    "constraints": {
+      "label": "Einschränkungen",
+      "help": "Regeln, die Konsumenten und Agenten bei der Nutzung einhalten müssen.",
+      "placeholder": "Einschränkung",
+      "add": "+ Einschränkung hinzufügen",
+      "remove": "Einschränkung entfernen"
+    }
+  },
+  "synonyms": {
+    "add": "+ Synonym hinzufügen",
+    "remove": "Synonym entfernen",
+    "synonym": {
+      "placeholder": "Synonym"
+    },
+    "locale": {
+      "placeholder": "Sprache",
+      "title": "Sprache (BCP-47-Sprachcode, z. B. en-US, de-DE). Leer lassen, wenn das Synonym nicht sprachspezifisch ist."
+    },
+    "description": {
+      "placeholder": "Beschreibung (optional)"
+    }
+  },
+  "enumValues": {
+    "add": "+ Wert hinzufügen",
+    "remove": "Wert entfernen",
+    "value": {
+      "placeholder": "Wert"
+    },
+    "label": {
+      "placeholder": "Bezeichnung (optional)"
+    },
+    "description": {
+      "placeholder": "Beschreibung (optional)"
+    }
   }
 }

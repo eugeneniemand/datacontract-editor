@@ -11,7 +11,9 @@ The customization system allows organizations to:
 
 ## Configuration File
 
-Create a `customization.yaml` file in your project root or specify a path via the `CUSTOMIZATION_CONFIG` environment variable.
+Create a `customization.yaml` file in the directory you start the editor from, or point the
+`CUSTOMIZATION_CONFIG` environment variable (or the `--customization` CLI flag) at a file.
+See [Loading Customizations](#loading-customizations) for the details per deployment mode.
 
 ```yaml
 # customization.yaml
@@ -122,7 +124,9 @@ The `pattern` field accepts regular expressions for input validation. Be aware t
 #### support
 - `channel`, `url`, `description`, `tool`, `scope`, `invitationUrl`
 
-> **Note:** override support is wired per field. `hidden` works for every property listed above. The other keys (`title`, `description`, `placeholder`, `required`, `enum`, `pattern`, `minLength`, `maxLength`) are honored only where the field supports them — for example `enum` applies to `schema.properties.classification`, `servers.type`, `servers.environment`, and `support.tool`/`scope`. Text fields such as `schema.properties.description` and `schema.properties.examples` honor `title`, `description`, `required`, `placeholder`, `minLength` and `maxLength` (for these two, `description` renders as help text **below** the field); boolean fields typically honor just `hidden` (and sometimes `title`). Where an override is not set, the built-in i18n label/help for the requested language is used.
+> **Note:** override support is wired per field. `hidden` works for every property listed above. The other keys (`title`, `description`, `placeholder`, `required`, `enum`, `pattern`, `minLength`, `maxLength`) are honored only where the field supports them — for example `enum` applies to `schema.properties.classification`, `servers.type`, `servers.environment`, and `support.tool`/`scope`. Text fields honor `title`, `description`, `required`, `placeholder`, `minLength` and `maxLength`; this includes `team.description`, `schema.dataGranularityDescription`, and in `schema.properties` the fields `description`, `examples`, `transformSourceObjects`, `transformLogic` and `transformDescription` (for these, `description` renders as help text **below** the field, elsewhere it is the tooltip next to the label). The type selectors `schema.properties.logicalType` and `schema.properties.physicalType` honor `title`, `description`, `placeholder` and `required`. Boolean fields typically honor just `hidden` (and sometimes `title`). Where an override is not set, the built-in i18n label/help for the requested language is used.
+>
+> When every standard field of the property-level **Transformations** section is hidden and no custom property is anchored into it (`positionAfter` on one of its fields), the whole section is omitted instead of rendering an empty collapsible.
 
 ---
 
@@ -153,11 +157,41 @@ dataContract:
         condition: "expression"         # Conditional display expression
         positionAfter: "description"    # Render inline after this property (standard or custom)
         hidden: true                    # Hide from form UI and preview (still editable in YAML editor)
+        auto: true                      # Empty means the host derives the value (select/multiselect, root level); or { hint }
 ```
 
 ### Hiding properties from the form UI
 
 Set `hidden: true` to keep a custom property out of the form-based editor and the preview/display view. The property still round-trips through the YAML untouched — Monaco YAML editing shows and edits it normally. Use this for fields managed externally (API/automation) that non-technical users should not see or edit. Mirrors the `hidden` semantics already supported on standard properties.
+
+### Auto values derived by the host
+
+Set `auto: true` on a root-level `select` or `multiselect` property whose empty value means "derive it", for example a contract-level classification that the host rolls up from the schema's columns. The field then shows an explicit **Auto** choice followed by one choice per enum option:
+
+- The Auto choice shows the values the host currently derives. Choosing it clears the property.
+- Picking an option sets the property explicitly, replacing what Auto would give.
+- `auto: { hint: "From the schema" }` replaces the default hint shown under "Auto".
+- When the host reports that the explicit value drops or weakens what Auto would give, a warning appears under the field.
+
+The derived values come from the `autoValues.url` init option (see CONFIGURATION.md). The editor POSTs the current document to it, debounced while the user edits:
+
+```
+POST {autoValues.url}
+{ "yaml": "<the current document>" }
+
+200
+{
+  "properties": {
+    "classification": {
+      "values": ["Restricted"],
+      "detail": "Restricted from ARTICLE_NAME",
+      "warning": "Public is less sensitive than the schema, which has Restricted on ARTICLE_NAME."
+    }
+  }
+}
+```
+
+`values` are shown on the Auto choice, `detail` as its tooltip, and `warning` under the field while an explicit value is set. The host computes the warning from the document it received, so the editor needs no knowledge of what the values mean. Without `autoValues.url` the Auto choice still works, it just shows no derived values.
 
 ### Positioning
 
@@ -207,6 +241,16 @@ enum:
 ```
 
 Note: `title` is also supported as an alias for `label` for backwards compatibility.
+
+On a property with `auto: true`, an option may also carry a `color` and an `icon`, used for its choice and for its badge on the Auto choice:
+
+```yaml
+enum:
+  - value: "Restricted"
+    label: "Restricted"
+    color: "red"          # gray, red, orange, amber, yellow, green, teal, blue, indigo, purple or pink
+    icon: "<svg ...>"     # SVG markup or an image URL, always rendered as an image
+```
 
 ### Conditional Display
 
@@ -475,7 +519,40 @@ dataContract:
 
 ## Loading Customizations
 
-### Programmatic (Recommended)
+### CLI (`npx datacontract-editor`)
+
+The CLI looks for a customization file in this order and uses the first match:
+
+1. `--customization <path>` (`-c`) flag
+2. `CUSTOMIZATION_CONFIG` environment variable (absolute path, or relative to the working directory)
+3. `./customization.yaml` in the working directory
+
+```bash
+npx datacontract-editor                                   # picks up ./customization.yaml if present
+npx datacontract-editor -c config/customization.yaml
+CUSTOMIZATION_CONFIG=/etc/editor/customization.yaml npx datacontract-editor my.odcs.yaml
+```
+
+A file given explicitly via flag or env variable must exist and parse as YAML with a top-level
+`dataContract` or `yamlFormat` key, otherwise the CLI exits with an error. The resolved file is
+printed at startup.
+
+### Docker
+
+Mount the file into the container and reference it with `CUSTOMIZATION_CONFIG`:
+
+```bash
+docker run -p 4173:4173 \
+  -v $(pwd)/customization.yaml:/customization.yaml:ro \
+  -e CUSTOMIZATION_CONFIG=/customization.yaml \
+  datacontract/editor
+```
+
+Alternatively mount it straight to `/usr/share/nginx/html/customization.yaml`. Either way the
+frontend fetches `/customization.yaml` at startup. A `customizations` object in `/config.json`
+takes precedence if both are present.
+
+### Programmatic (Embedded)
 
 Pass customizations directly to the `init()` function:
 

@@ -38,4 +38,7 @@ docs/api/
 dev-config.json
 docs/superpowers/
 
+# Test artifacts
+test-results/
+.preview-server.pid
 *.env

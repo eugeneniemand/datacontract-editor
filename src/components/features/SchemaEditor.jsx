@@ -2,7 +2,6 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useEditorStore} from '../../store.js';
 import {isSafeKey} from '../../utils/safeProperty.js';
-import {Tooltip} from '../ui/index.js';
 import {getSchemaEnumValues} from '../../lib/schemaEnumExtractor.js';
 import TagsInput from '../ui/TagsInput.jsx';
 import ChevronRightIcon from "../ui/icons/ChevronRightIcon.jsx";
@@ -13,7 +12,6 @@ import AuthoritativeDefinitionsEditor from '../ui/AuthoritativeDefinitionsEditor
 import ValidatedInput from '../ui/ValidatedInput.jsx';
 import ValidatedTextarea from '../ui/ValidatedTextarea.jsx';
 import QualityEditor from '../ui/QualityEditor.jsx';
-import QuestionMarkCircleIcon from '../ui/icons/QuestionMarkCircleIcon.jsx';
 import {SparkleButton} from '../../ai/index.js';
 import {Disclosure, DisclosureButton, DisclosurePanel} from '@headlessui/react';
 import PropertyRow from './schema/PropertyRow.jsx';
@@ -28,10 +26,19 @@ import {
 } from '@dnd-kit/sortable';
 import {useBrowseDropIndicator} from '../browse/browseDropContext.js';
 import {buildPropertyPath} from '../../utils/schemaPathBuilder.js';
+import SynonymsEditor from '../ui/SynonymsEditor.jsx';
+import ContextEditor from '../ui/ContextEditor.jsx';
+import { useSchemaProperty } from '../../hooks/useSchemaCapability.js';
+import useMeasuredColumns from './schema/useMeasuredColumns.js';
 
 const SchemaEditor = ({schemaIndex}) => {
 	const {t} = useTranslation();
 	const jsonSchema = useEditorStore((state) => state.schemaData);
+
+	// ODCS 3.2.0 capabilities on schema objects
+	const hasSchemaDeprecated = useSchemaProperty('deprecated', 'schema');
+	const hasSchemaSynonyms = useSchemaProperty('synonyms', 'schema');
+	const hasSchemaContext = useSchemaProperty('context', 'schema');
 	const editorConfig = useEditorStore((state) => state.editorConfig);
 	const yamlParts = useEditorStore((state) => state.yamlParts);
 	const removeValue = useEditorStore((state) => state.removeValue);
@@ -91,6 +98,7 @@ const SchemaEditor = ({schemaIndex}) => {
 	const descriptionOverride = useStandardPropertyOverride('schema', 'description');
 	const businessNameOverride = useStandardPropertyOverride('schema', 'businessName');
 	const logicalTypeOverride = useStandardPropertyOverride('schema', 'logicalType');
+	const dataGranularityDescriptionOverride = useStandardPropertyOverride('schema', 'dataGranularityDescription');
 
 	// Convert array format to object lookup for UI components
 	const customPropertiesLookup = useMemo(() => {
@@ -154,6 +162,7 @@ const SchemaEditor = ({schemaIndex}) => {
 
 	// Ref for properties container to detect outside clicks
 	const propertiesContainerRef = useRef(null);
+	useMeasuredColumns(propertiesContainerRef);
 	const drawerRef = useRef(null);
 
 	// Refs for auto-editing newly added properties (like diagram editor)
@@ -486,6 +495,7 @@ const SchemaEditor = ({schemaIndex}) => {
 											tooltip={descriptionOverride?.description || t('schema.field.description.tooltip')}
 											placeholder={schemaDefinitionData?.description || descriptionOverride?.placeholder || t('schema.field.description.placeholder')}
 											placeholderClassName={schemaDefinitionData?.description && !schema[schemaIndex].description ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+											inheritedValue={schemaDefinitionData?.description}
 											minLength={descriptionOverride?.minLength}
 											maxLength={descriptionOverride?.maxLength}
 											rows={2}
@@ -527,6 +537,7 @@ const SchemaEditor = ({schemaIndex}) => {
 																tooltip={businessNameOverride?.description || t('schema.field.businessName.tooltip')}
 																placeholder={schemaDefinitionData?.businessName || businessNameOverride?.placeholder || t('schema.field.businessName.placeholder')}
 																placeholderClassName={schemaDefinitionData?.businessName && !schema[schemaIndex].businessName ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+																inheritedValue={schemaDefinitionData?.businessName}
 																pattern={businessNameOverride?.pattern}
 																patternMessage={businessNameOverride?.patternMessage}
 																minLength={businessNameOverride?.minLength}
@@ -580,6 +591,7 @@ const SchemaEditor = ({schemaIndex}) => {
 																tooltip={physicalNameOverride?.description || t('schema.field.physicalName.tooltip')}
 																placeholder={schemaDefinitionData?.physicalName || physicalNameOverride?.placeholder || 'shipments_v1'}
 																placeholderClassName={schemaDefinitionData?.physicalName && !schema[schemaIndex].physicalName ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+																inheritedValue={schemaDefinitionData?.physicalName}
 																pattern={physicalNameOverride?.pattern}
 																patternMessage={physicalNameOverride?.patternMessage}
 																minLength={physicalNameOverride?.minLength}
@@ -598,6 +610,7 @@ const SchemaEditor = ({schemaIndex}) => {
 																tooltip={logicalTypeOverride?.description || t('schema.field.logicalType.tooltip')}
 																placeholder={schemaDefinitionData?.logicalType || logicalTypeOverride?.placeholder || 'object'}
 																placeholderClassName={schemaDefinitionData?.logicalType && !schema[schemaIndex].logicalType ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+																inheritedValue={schemaDefinitionData?.logicalType}
 																pattern={logicalTypeOverride?.pattern}
 																patternMessage={logicalTypeOverride?.patternMessage}
 																minLength={logicalTypeOverride?.minLength}
@@ -609,26 +622,73 @@ const SchemaEditor = ({schemaIndex}) => {
 													{/* Data Granularity Description Field */}
 													{!isDataGranularityDescriptionHidden && (
 														<div className="mt-4">
-															<div className="flex items-center gap-1 mb-1">
-																<label htmlFor={`schema-data-granularity-${schemaIndex}`}
-																			 className="block text-xs font-medium leading-4 text-gray-900">
-																	{t('schema.field.dataGranularity.label')}
-																</label>
-																<Tooltip content={t('schema.field.dataGranularity.tooltip')}>
-																	<QuestionMarkCircleIcon/>
-																</Tooltip>
-															</div>
-															<textarea
-																id={`schema-data-granularity-${schemaIndex}`}
+															<ValidatedTextarea
 																name={`schema-data-granularity-${schemaIndex}`}
-																rows={2}
+																label={dataGranularityDescriptionOverride?.title || t('schema.field.dataGranularity.label')}
 																value={schema[schemaIndex].dataGranularityDescription || ''}
 																onChange={(e) => setValue(`schema[${schemaIndex}].dataGranularityDescription`, e.target.value)}
-																className={`mt-1 block w-full rounded-md border-0 py-1.5 pl-2 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 ${schemaDefinitionData?.dataGranularityDescription && !schema[schemaIndex].dataGranularityDescription ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'} focus:ring-2 focus:ring-inset focus:ring-indigo-600 text-xs leading-4`}
-																placeholder={schemaDefinitionData?.dataGranularityDescription || "e.g., One record per customer per day"}
+																required={dataGranularityDescriptionOverride?.required ?? false}
+																tooltip={dataGranularityDescriptionOverride?.description || t('schema.field.dataGranularity.tooltip')}
+																placeholder={schemaDefinitionData?.dataGranularityDescription || dataGranularityDescriptionOverride?.placeholder || "e.g., One record per customer per day"}
+																placeholderClassName={schemaDefinitionData?.dataGranularityDescription && !schema[schemaIndex].dataGranularityDescription ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+																inheritedValue={schemaDefinitionData?.dataGranularityDescription}
+																minLength={dataGranularityDescriptionOverride?.minLength}
+																maxLength={dataGranularityDescriptionOverride?.maxLength}
+																rows={2}
 															/>
 														</div>
 													)}
+
+													{/* Deprecated / Synonyms / Context (ODCS 3.2.0+) */}
+
+													{hasSchemaDeprecated && (
+
+														<div className="mt-4 flex items-center gap-2">
+
+															<input
+
+																id={`schema-deprecated-${schemaIndex}`}
+
+																type="checkbox"
+
+																checked={schema[schemaIndex].deprecated === true}
+
+																onChange={(e) => setValue(`schema[${schemaIndex}].deprecated`, e.target.checked ? true : undefined)}
+
+																className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+
+															/>
+
+															<label htmlFor={`schema-deprecated-${schemaIndex}`} className="text-xs font-medium text-gray-900">{t('schema.field.deprecated.label')}</label>
+
+														</div>
+
+													)}
+
+													{hasSchemaSynonyms && (
+
+														<div className="mt-4">
+
+															<label className="block text-xs font-medium leading-4 text-gray-900 mb-1">{t('schema.field.synonyms.label')}</label>
+
+															<SynonymsEditor value={schema[schemaIndex].synonyms} onChange={(value) => setValue(`schema[${schemaIndex}].synonyms`, value)} />
+
+														</div>
+
+													)}
+
+													{hasSchemaContext && (
+
+														<div className="mt-4">
+
+															<label className="block text-xs font-medium leading-4 text-gray-900 mb-1">{t('schema.field.context.label')}</label>
+
+															<ContextEditor value={schema[schemaIndex].context} onChange={(value) => setValue(`schema[${schemaIndex}].context`, value)} />
+
+														</div>
+
+													)}
+
 
 													{/* Tags Field */}
 													{!isTagsHidden && (
@@ -751,7 +811,9 @@ const SchemaEditor = ({schemaIndex}) => {
 												items={schema[schemaIndex].properties.map((_, idx) => `prop-${schemaIndex}-${idx}`)}
 												strategy={verticalListSortingStrategy}
 											>
-												<div className="rounded-b-md" ref={setPropertiesDropRef}>
+												{/* @container lets rows hide the examples column when the list is narrow
+										    (e.g. preview pane open) instead of crushing the description. */}
+										<div className="rounded-b-md @container" ref={setPropertiesDropRef}>
 													{schema[schemaIndex].properties.map((property, propIndex) => (
 														<PropertyRow
 															key={`prop-${propIndex}`}

@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { defaultOdcsVersionEntry, odcsVersionsFromConfig } from './services/schemaRegistry.js';
 import { createRoot } from 'react-dom/client'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -11,8 +12,10 @@ import i18n from './i18n/index.js'
 import { LocalFileStorageBackend } from './services/LocalFileStorageBackend.js'
 import {getValueWithPath, setOverrideStore, setValueWithPath, removeValueWithPath, extractParseErrorMessage, extractParseErrorPos} from './store.js'
 import { createAuthoritativeDefinitionsSlice } from './lib/authoritativeDefinitionsSlice.js';
+import { createAutoValuesSlice } from './lib/autoValuesSlice.js';
+import { viewSwitch } from './lib/viewSwitch.js';
 import { createBrowsePanelSlice } from './components/browse/browsePanelSlice.js';
-import { registerTool, unregisterTool, clearTools } from './ai/aiService.js'
+import { registerTool, unregisterTool, clearTools } from './ai/index.js'
 import { toolTemplates, createTool, registerBuiltInTools } from './services/aiTools.js'
 import { DEFAULT_AI_CONFIG } from './config/defaults.js'
 import './index.css'
@@ -21,6 +24,8 @@ import './components/diagram/DiagramStyles.css'
 import * as Yaml from "yaml";
 import { parseYaml, stringifyYaml, setYamlFormatConfig } from './utils/yaml.js';
 import { getStorageConfig } from './utils/persistence.js';
+import { createTestActions } from './services/testRunner.js';
+import { mergePersistedEmbedState } from './lib/embedPersistence.js';
 
 /**
  * Data Contract Editor - Embeddable Component
@@ -44,10 +49,17 @@ const DEFAULT_CONFIG = {
   container: '#datacontract-editor',
 
   // Initial YAML content
-  yaml: 'apiVersion: "v3.1.0"\nkind: "DataContract"\nid: "example-id"\nversion: "0.0.1"\nstatus: "draft"\nname: "Example Data Contract"\n',
+  yaml: 'apiVersion: "v3.2.0"\nkind: "DataContract"\nid: "example-id"\nversion: "0.0.1"\nstatus: "draft"\nname: "Example Data Contract"\n',
 
-  // Schema URL for validation
-  schemaUrl: 'https://raw.githubusercontent.com/bitol-io/open-data-contract-standard/refs/heads/main/schema/odcs-json-schema-v3.1.0.json',
+  // The ODCS versions the host supports, each with the JSON schema a document of that version is
+  // validated against, e.g. [{ version: 'v3.2.0', schema: '<url>', default: true }, { version:
+  // 'v3.1.0', schema: '<url>' }]. The default is what new contracts get and what the Migrate
+  // action in Fundamentals targets; null means the built-in list (see schemaRegistry.js).
+  odcsVersions: null,
+
+  // Deprecated: a single schema URL for validation. Use odcsVersions instead; when both are
+  // absent the built-in default schema is used.
+  schemaUrl: null,
 
   // Available server types (null = all, array = filtered list)
   serverTypes: null,
@@ -88,7 +100,7 @@ const DEFAULT_CONFIG = {
   onCancel: null,      // () => void - only for EMBEDDED mode
   onDelete: null,      // () => void - only for EMBEDDED mode
   showDelete: true,    // boolean - show Delete button in EMBEDDED mode (default: true)
-  saveLabel: 'Save',   // string - custom label for Save button in EMBEDDED mode
+  saveLabel: null,     // string - custom label for Save button in EMBEDDED mode (default: localized "Save")
 	titlePrefix: null,
 
   // Semantic ontology tree browser (the tree may also include business definitions)
@@ -103,6 +115,21 @@ const DEFAULT_CONFIG = {
   // products with contracts ([{externalId, name}]); each product's contracts
   // load lazily from `${contractsBaseUrl}/{externalId}/contracts`.
   dataProducts: null,
+
+  // Assets browse panel: { url, catalogUrl, assetDetailsUrlTemplate }. While the
+  // document has servers, the editor POSTs { servers } to url and expects
+  // [{ server, type, assets: [{ externalId, name, type, description, iconUrl,
+  // physicalName, properties: [...] }] }], one entry per posted server.
+  // Without servers, it browses the whole catalog with GETs to catalogUrl:
+  // no parameter for the top level of the asset tree, ?parent=<externalId> for
+  // the children of an asset, ?query=<text> (3+ characters) to search. Each
+  // returns { assets: [{ ...as above, hasChildren }], truncated }.
+  assets: null,
+
+  // Derived ("Auto") values for custom properties configured with `auto: true`: { url }.
+  // The editor POSTs { yaml } to url and expects
+  // { properties: { <property>: { values: [...], detail?, warning? } } }. See CUSTOMIZATION.md.
+  autoValues: null,
 
   managedTags: [], // [{tag: 'tag1', href: 'https://...'}, ...]
   allowUnmanagedTags: true,
@@ -142,6 +169,7 @@ const DEFAULT_CONFIG = {
  * Create a custom Zustand store with configuration
  */
 function createConfiguredStore(config) {
+  const odcsVersions = odcsVersionsFromConfig(config);
   const storageBackend = config.backend || new LocalFileStorageBackend();
   globalBackend = storageBackend;
 
@@ -212,97 +240,11 @@ function createConfiguredStore(config) {
 				isPreviewVisible: state.isTestResultsVisible ? false : false,
 				isWarningsVisible: state.isTestResultsVisible ? false : false,
 			})),
-			runTest: async (server) => {
-				const { yaml, editorConfig } = get();
-				set({ isTestRunning: true });
-				try {
-					// Build the test endpoint URL - read from store state to pick up settings changes
-					const baseUrl = editorConfig?.tests?.dataContractCliApiServerUrl || config.tests?.dataContractCliApiServerUrl || '';
-					const testEndpoint = `${baseUrl}/test`;
-					const url = server
-						? `${testEndpoint}?server=${encodeURIComponent(server)}`
-						: testEndpoint;
-
-					// Build headers with optional API key
-					const headers = {
-						'Content-Type': 'text/plain',
-					};
-					if (editorConfig?.tests?.apiKey) {
-						headers['X-API-KEY'] = editorConfig.tests.apiKey;
-					}
-
-					const response = await fetch(url, {
-						method: 'POST',
-						headers,
-						body: yaml,
-					});
-
-					if (!response.ok) {
-						let errorMessage = `Server returned error: ${response.status} ${response.statusText}`;
-						try {
-							const errorData = await response.json();
-							if (errorData.message) {
-								errorMessage = errorData.message;
-							} else if (errorData.error) {
-								errorMessage = errorData.error;
-							}
-						} catch {
-							try {
-								const errorText = await response.text();
-								if (errorText) {
-									errorMessage = errorText;
-								}
-							} catch {
-								// Keep default error message
-							}
-						}
-						throw new Error(errorMessage);
-					}
-
-					const result = await response.json();
-					let success = false;
-					if (result.result) {
-						success = result.result === 'passed' || result.result === 'pass';
-					} else if (Array.isArray(result.checks)) {
-						const hasFailures = result.checks.some(check =>
-							check.result === 'failed' || check.result === 'fail' || check.result === false
-						);
-						success = !hasFailures;
-					}
-
-					const newResult = {
-						timestamp: new Date().toISOString(),
-						success: success,
-						data: result,
-					};
-
-					set({ testResults: [newResult], isTestRunning: false });
-					return newResult;
-				} catch (error) {
-					let errorMessage = error.message;
-					let isConnectionError = false;
-
-					if (error.name === 'TypeError' && error.message.includes('fetch')) {
-						errorMessage = 'Cannot connect to test server.';
-						isConnectionError = true;
-					} else if (error.message === 'Unexpected end of JSON input' || error.message.includes('JSON')) {
-						errorMessage = 'Test server returned an invalid response.';
-					}
-
-					const errorResult = {
-						timestamp: new Date().toISOString(),
-						success: false,
-						error: errorMessage,
-						isConnectionError: isConnectionError,
-					};
-
-					set({ testResults: [errorResult], isTestRunning: false });
-					throw error;
-				}
-			},
+			// read the URL from store state to pick up settings changes
+			...createTestActions(set, get, (editorConfig) => editorConfig?.tests?.dataContractCliApiServerUrl || config.tests?.dataContractCliApiServerUrl || ''),
 			clearTestResults: () => set({ testResults: [] }),
 			setMarkers: (markers) => set({ markers }),
-			setView: (view) => set({ currentView: view }),
+			setView: (view) => set((state) => viewSwitch(state, view)),
 			setSelectedDiagramSchemaIndex: (index) => set({ selectedDiagramSchemaIndex: index }),
 			setSchemaInfo: (schemaUrl, schemaData) => set({ schemaUrl, schemaData }),
 			loadFromFile: async () => {
@@ -364,9 +306,11 @@ function createConfiguredStore(config) {
 			yamlParts: Yaml.parse(config.yaml),
 			baselineYaml: config.yaml, // Set initial YAML as baseline for diff view
 			isDirty: false,
-			isPreviewVisible: true,
+			// the diagram takes the full width, so a diagram start keeps the preview for later
+			isPreviewVisible: config.initialView !== 'diagram',
 			isWarningsVisible: false,
 			isTestResultsVisible: false,
+			rightPaneBeforeDiagram: config.initialView === 'diagram' ? 'preview' : null, // right pane hidden on entering the diagram, restored on leaving it
 			isTestRunning: false,
 			isMobileSidebarOpen: false,
 			isAiPanelOpen: false,
@@ -380,7 +324,8 @@ function createConfiguredStore(config) {
 			yamlParseErrorPos: null,
 			pendingScrollToPos: null,
 			currentView: config.initialView,
-			schemaUrl: config.schemaUrl,
+			odcsVersions,
+			schemaUrl: defaultOdcsVersionEntry(odcsVersions).schema,
 			schemaData: null,
 			yamlCursorLine: 1,
 			lastSaveInfo: null,
@@ -397,6 +342,8 @@ function createConfiguredStore(config) {
 				titlePrefix: config.titlePrefix,
 				semantics: config.semantics,
 				dataProducts: config.dataProducts,
+				assets: config.assets,
+				autoValues: config.autoValues,
         managedTags: config.managedTags,
         allowUnmanagedTags: config.allowUnmanagedTags,
 				dataProductsUsingContract: config.dataProductsUsingContract,
@@ -408,6 +355,7 @@ function createConfiguredStore(config) {
 				csrf: config.csrf,
 			},
 			...authoritativeDefinitionsSlice,
+			...createAutoValuesSlice(set, get),
 			...createBrowsePanelSlice(set),
 			...actions,
 		};
@@ -427,7 +375,13 @@ function createConfiguredStore(config) {
       persist(storeConfig, {
         name: 'editor-store',
         storage: storageConfig,
-        partialize: ({ authoritativeDefinitions, ...rest }) => rest, // eslint-disable-line no-unused-vars
+        partialize: ({ authoritativeDefinitions, isTestRunning, ...rest }) => rest, // eslint-disable-line no-unused-vars
+        // Deep-merge editorConfig on rehydrate (mirrors src/store.js). The default
+        // shallow merge lets a stale persisted editorConfig replace the one just
+        // built from init() config — which hides the AI assistant when it was
+        // enabled after the store was first persisted. See embedPersistence.js.
+        merge: (persistedState, currentState) =>
+          mergePersistedEmbedState(persistedState, currentState, { builtInYaml: DEFAULT_CONFIG.yaml }),
       })
     );
   } else {
@@ -575,6 +529,13 @@ export function init(userConfig = {}) {
     },
 
     /**
+     * Cancel the running test
+     */
+    cancelTest() {
+      globalEditorStore.getState().cancelTest();
+    },
+
+    /**
      * Get validation markers
      */
     getMarkers() {
@@ -675,3 +636,13 @@ export function getFileStorageBackend() {
 }
 
 export { parseYaml };
+
+/**
+ * Runtime config helpers used by the standalone index.html bootstrap:
+ * - loadCustomizationYaml: fetch/parse a customization.yaml served next to the app.
+ * - loadRuntimeConfig: fetch /config.json (Docker deployments) and fold in customization.yaml.
+ * - buildEditorConfig: turn that runtime config into an init() config fragment.
+ * - buildDocumentConfig: the initial data contract and schemas of that runtime config, for init().
+ * See CUSTOMIZATION.md and CONFIGURATION.md.
+ */
+export { loadCustomizationYaml, loadRuntimeConfig, buildEditorConfig, buildDocumentConfig } from './config/runtimeConfig.js';

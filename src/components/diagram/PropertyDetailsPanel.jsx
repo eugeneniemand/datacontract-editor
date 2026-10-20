@@ -13,8 +13,12 @@ import CustomPropertiesEditor from '../ui/CustomPropertiesEditor.jsx';
 import EnumField from '../ui/EnumField.jsx';
 import ValidatedInput from '../ui/ValidatedInput.jsx';
 import ValidatedTextarea from '../ui/ValidatedTextarea.jsx';
+import OverrideInheritedButton from '../ui/OverrideInheritedButton.jsx';
 import TagsInput from '../ui/TagsInput.jsx';
 import QualityEditor from '../ui/QualityEditor.jsx';
+import SynonymsEditor from '../ui/SynonymsEditor.jsx';
+import EnumValuesEditor from '../ui/EnumValuesEditor.jsx';
+import { useSchemaProperty } from '../../hooks/useSchemaCapability.js';
 import Tooltip from '../ui/Tooltip.jsx';
 import {SparkleButton} from '../../ai/index.js';
 import {useEditorStore} from '../../store.js';
@@ -23,9 +27,29 @@ import {useCustomization, useIsPropertyHidden, useStandardPropertyOverride} from
 import {CustomContentAfter, CustomSections, UngroupedCustomProperties} from '../ui/CustomSection.jsx';
 import {DefinitionSelectionModal} from '../ui/DefinitionSelectionModal.jsx';
 import {isExternalUrl, toAbsoluteUrl} from '../../lib/urlUtils.js';
+import {isStandardSectionEmpty} from '../../lib/customContentAnchors.js';
 import {useDefinition} from '../../hooks/useDefinition.js';
 import PhysicalTypeCombobox from '../ui/TypeSelector/PhysicalTypeCombobox.jsx';
 import {useActiveServerType} from '../../hooks/useActiveServerType.js';
+
+// Number of values that are actually set: non-empty strings/arrays/objects,
+// numbers, and `true` (a `false` flag is the default and doesn't count).
+const countFilled = (values) => values.filter((v) => {
+  if (v == null || v === false || v === '') return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.values(v).some((x) => x != null && x !== '');
+  return true;
+}).length;
+
+// Section header label with a badge showing how many fields are filled
+const SectionLabel = ({ label, count }) => (
+  <span className="flex items-center gap-1.5">
+    <span>{label}</span>
+    {count > 0 && (
+      <span className="rounded-full bg-indigo-100 px-1.5 text-[10px] font-semibold leading-4 text-indigo-700">{count}</span>
+    )}
+  </span>
+);
 
 const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focusNonce, focusRelationshipTo }) => {
   const { t } = useTranslation();
@@ -49,6 +73,14 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
   const editorConfig = useEditorStore((state) => state.editorConfig);
   const { getDefinition } = useDefinition();
   const serverType = useActiveServerType();
+
+  // ODCS 3.2.0 capabilities: fields are offered only when the active schema defines them
+  const hasSemanticType = useSchemaProperty('semanticType', 'property');
+  const hasDeprecated = useSchemaProperty('deprecated', 'property');
+  const hasSynonyms = useSchemaProperty('synonyms', 'property');
+  const hasEnumValues = useSchemaProperty('enum', 'property');
+  const hasMapType = useSchemaProperty('map', 'property');
+  const hasVectorOptions = useSchemaProperty('logicalTypeOptions.dimensions', 'property');
 
   // Modal state
   const [isDefinitionModalOpen, setIsDefinitionModalOpen] = useState(false);
@@ -96,6 +128,8 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
   const partitionedOverride = useStandardPropertyOverride('schema.properties', 'partitioned');
   const criticalDataElementOverride = useStandardPropertyOverride('schema.properties', 'criticalDataElement');
   const transformSourceObjectsOverride = useStandardPropertyOverride('schema.properties', 'transformSourceObjects');
+  const transformLogicOverride = useStandardPropertyOverride('schema.properties', 'transformLogic');
+  const transformDescriptionOverride = useStandardPropertyOverride('schema.properties', 'transformDescription');
   const descriptionOverride = useStandardPropertyOverride('schema.properties', 'description');
   const examplesOverride = useStandardPropertyOverride('schema.properties', 'examples');
 
@@ -244,6 +278,29 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
     return property.authoritativeDefinitions?.filter(d => !isSemanticAuthDef(d) && d.type !== 'definition');
   }, [property.authoritativeDefinitions, isSemanticsEnabled]);
 
+  // Filled-field counts shown as badges on the collapsed section headers
+  const logicalTypeOptions = property.logicalTypeOptions || {};
+  const sectionCounts = {
+    semantics: semanticDefinition ? 1 : 0,
+    logicalTypeOptions: countFilled(Object.values(logicalTypeOptions)),
+    constraints: countFilled([property.required, property.unique, property.primaryKey, property.partitioned, property.deprecated]),
+    enumValues: countFilled(property.enum || []),
+    synonyms: countFilled(property.synonyms || []),
+    classificationSecurity: countFilled([property.classification, property.criticalDataElement, property.encryptedName, property.tags]),
+    transformations: countFilled([property.transformDescription, property.transformLogic, property.transformSourceObjects]),
+    dataQuality: property.quality?.length || 0,
+    authoritativeDefinitions: filteredAuthoritativeDefinitions?.length || 0,
+    relationships: property.relationships?.length || 0,
+    customProperties: property.customProperties?.length || 0,
+  };
+
+  const isTransformationsSectionEmpty = isStandardSectionEmpty(
+    [isTransformSourceObjectsHidden, isTransformLogicHidden, isTransformDescriptionHidden],
+    ['transformSourceObjects', 'transformLogic', 'transformDescription'],
+    customPropertyConfigs,
+    customSections,
+  );
+
   // Renders any custom properties anchored after the given standard field.
   // Scoped to properties only; custom sections anchor to section IDs via
   // renderCustomSectionsAfter instead.
@@ -320,6 +377,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   tooltip={businessNameOverride?.description}
                   placeholder={definitionData?.businessName || businessNameOverride?.placeholder || "Human-readable name"}
                   placeholderClassName={definitionData?.businessName && !property.businessName ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                  inheritedValue={definitionData?.businessName}
                   pattern={businessNameOverride?.pattern}
                   patternMessage={businessNameOverride?.patternMessage}
                   minLength={businessNameOverride?.minLength}
@@ -339,6 +397,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   tooltip={physicalNameOverride?.description}
                   placeholder={definitionData?.physicalName || physicalNameOverride?.placeholder || "Actual database column name"}
                   placeholderClassName={definitionData?.physicalName && !property.physicalName ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                  inheritedValue={definitionData?.physicalName}
                   pattern={physicalNameOverride?.pattern}
                   patternMessage={physicalNameOverride?.patternMessage}
                   minLength={physicalNameOverride?.minLength}
@@ -355,11 +414,26 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   value={property.logicalType || ''}
                   onChange={(value) => updateField('logicalType', value || undefined)}
                   label={logicalTypeOverride?.title || t('diagram.field.logicalType.label')}
+                  placeholder={logicalTypeOverride?.placeholder}
+                  required={logicalTypeOverride?.required ?? false}
+                  tooltip={logicalTypeOverride?.description}
                   fallbackOptions={['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean']}
                   valueFromDefinition={definitionData?.logicalType}
                 />
               )}
               {renderCustomAfter('logicalType')}
+
+              {/* Semantic Type (ODCS 3.2.0+) */}
+              {hasSemanticType && (
+                <EnumField
+                  propertyPath="semanticType"
+                  context="property"
+                  value={property.semanticType || ''}
+                  onChange={(value) => updateField('semanticType', value || undefined)}
+                  label={t('diagram.field.semanticType.label')}
+                  fallbackOptions={['column', 'measure', 'dimension']}
+                />
+              )}
 
               {/* Array Item Type - only shown when logical type is array */}
               {!isLogicalTypeHidden && property.logicalType === 'array' && (
@@ -377,6 +451,81 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                 />
               )}
 
+              {/* Map key/value types - only when logical type is map (ODCS 3.2.0+) */}
+              {hasMapType && property.logicalType === 'map' && (
+                <>
+                  <EnumField
+                    propertyPath="logicalType"
+                    context="property"
+                    value={property.map?.key?.logicalType || ''}
+                    onChange={(value) => updateField('map', { ...property.map, key: { ...property.map?.key, logicalType: value || undefined } })}
+                    label={t('diagram.field.mapKeyType.label')}
+                    fallbackOptions={['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean']}
+                  />
+                  <EnumField
+                    propertyPath="logicalType"
+                    context="property"
+                    value={property.map?.value?.logicalType || ''}
+                    onChange={(value) => updateField('map', { ...property.map, value: { ...property.map?.value, logicalType: value || undefined } })}
+                    label={t('diagram.field.mapValueType.label')}
+                    fallbackOptions={['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean']}
+                  />
+                </>
+              )}
+
+              {/* Vector options - only when logical type is vector (ODCS 3.2.0+) */}
+              {hasVectorOptions && property.logicalType === 'vector' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.vectorDimensions.label')}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={property.logicalTypeOptions?.dimensions ?? ''}
+                      onChange={(e) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, dimensions: e.target.value === '' ? undefined : parseInt(e.target.value) })}
+                      className="w-full rounded border border-gray-300 bg-white px-2 py-1 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                      placeholder="1536"
+                    />
+                  </div>
+                  <EnumField
+                    propertyPath="logicalTypeOptions.elementType"
+                    context="property"
+                    value={property.logicalTypeOptions?.elementType || ''}
+                    onChange={(value) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, elementType: value || undefined })}
+                    label={t('diagram.field.vectorElementType.label')}
+                    fallbackOptions={['bfloat16', 'binary', 'float16', 'float32', 'float64', 'int8', 'uint8']}
+                  />
+                  <EnumField
+                    propertyPath="logicalTypeOptions.distanceMetric"
+                    context="property"
+                    value={property.logicalTypeOptions?.distanceMetric || ''}
+                    onChange={(value) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, distanceMetric: value || undefined })}
+                    label={t('diagram.field.vectorDistanceMetric.label')}
+                    fallbackOptions={['cosine', 'dotProduct', 'euclidean', 'hamming', 'manhattan']}
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.vectorEmbeddingModel.label')}</label>
+                    <input
+                      type="text"
+                      value={property.logicalTypeOptions?.embeddingModel || ''}
+                      onChange={(e) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, embeddingModel: e.target.value || undefined })}
+                      className="w-full rounded border border-gray-300 bg-white px-2 py-1 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                      placeholder="openai/text-embedding-3-small"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="vector-normalized"
+                      type="checkbox"
+                      checked={property.logicalTypeOptions?.normalized === true}
+                      onChange={(e) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, normalized: e.target.checked ? true : undefined })}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                    />
+                    <label htmlFor="vector-normalized" className="text-xs font-medium text-gray-700">{t('diagram.field.vectorNormalized.label')}</label>
+                  </div>
+                </>
+              )}
+
               {/* Physical Type */}
               {!isPhysicalTypeHidden && (
                 <PhysicalTypeCombobox
@@ -387,6 +536,9 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   label={physicalTypeOverride?.title || t('diagram.field.physicalType.label')}
                   placeholder={definitionData?.physicalType || physicalTypeOverride?.placeholder || "e.g., VARCHAR(255)"}
                   placeholderClassName={definitionData?.physicalType && !property.physicalType ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                  inheritedValue={definitionData?.physicalType}
+                  required={physicalTypeOverride?.required ?? false}
+                  tooltip={physicalTypeOverride?.description}
                 />
               )}
               {renderCustomAfter('physicalType')}
@@ -402,6 +554,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                     required={descriptionOverride?.required}
                     placeholder={definitionData?.description || descriptionOverride?.placeholder || t('diagram.field.description.placeholder')}
                     placeholderClassName={definitionData?.description && !property.description ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                    inheritedValue={definitionData?.description}
                     minLength={descriptionOverride?.minLength}
                     maxLength={descriptionOverride?.maxLength}
                     actions={
@@ -440,6 +593,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                     required={examplesOverride?.required}
                     placeholder={definitionData?.examples ? definitionData.examples.join('\n') : "example1\nexample2\nexample3"}
                     placeholderClassName={definitionData?.examples && !property.examples ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                    inheritedValue={definitionData?.examples?.join('\n')}
                     minLength={examplesOverride?.minLength}
                     maxLength={examplesOverride?.maxLength}
                   />
@@ -460,7 +614,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
           {({ open }) => (
             <>
               <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-                <span>{t('diagram.section.semantics')}</span>
+                <SectionLabel label={t('diagram.section.semantics')} count={sectionCounts.semantics} />
                 <ChevronRightIcon
                   className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
                 />
@@ -605,7 +759,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.logicalTypeOptions')}</span>
+              <SectionLabel label={t('diagram.section.logicalTypeOptions')} count={sectionCounts.logicalTypeOptions} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -615,7 +769,12 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
               {(property.logicalType === 'string') && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.format.label')}</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-700">{t('diagram.field.format.label')}</label>
+                      {!property.logicalTypeOptions?.format && (
+                        <OverrideInheritedButton inheritedValue={definitionData?.logicalTypeOptions?.format} onOverride={(value) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, format: value })} />
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={property.logicalTypeOptions?.format || ''}
@@ -647,7 +806,12 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.pattern.label')}</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-700">{t('diagram.field.pattern.label')}</label>
+                      {!property.logicalTypeOptions?.pattern && (
+                        <OverrideInheritedButton inheritedValue={definitionData?.pattern} onOverride={(value) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, pattern: value })} />
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={property.logicalTypeOptions?.pattern || ''}
@@ -756,7 +920,12 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
               {(property.logicalType === 'date' || property.logicalType === 'timestamp' || property.logicalType === 'time') && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.format.label')}</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-700">{t('diagram.field.format.label')}</label>
+                      {!property.logicalTypeOptions?.format && (
+                        <OverrideInheritedButton inheritedValue={definitionData?.logicalTypeOptions?.format} onOverride={(value) => updateField('logicalTypeOptions', { ...property.logicalTypeOptions, format: value })} />
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={property.logicalTypeOptions?.format || ''}
@@ -856,7 +1025,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.constraints')}</span>
+              <SectionLabel label={t('diagram.section.constraints')} count={sectionCounts.constraints} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -1007,6 +1176,28 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   </p>
                 </div>
               )}
+              {/* Deprecated (ODCS 3.2.0+) */}
+              {hasDeprecated && (
+                <div>
+                  <label htmlFor="deprecated" className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.deprecated.label')}</label>
+                  <div className="grid grid-cols-1">
+                    <select
+                      id="deprecated"
+                      value={property.deprecated === true ? 'true' : property.deprecated === false ? 'false' : ''}
+                      onChange={(e) => updateField('deprecated', e.target.value === 'true' ? true : e.target.value === 'false' ? false : undefined)}
+                      className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pl-3 pr-8 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 text-xs text-gray-900"
+                    >
+                      <option value="">{t('diagram.option.notSet')}</option>
+                      <option value="false">{t('diagram.option.false')}</option>
+                      <option value="true">{t('diagram.option.true')}</option>
+                    </select>
+                    <ChevronDownIcon
+                      aria-hidden="true"
+                      className="pointer-events-none col-start-1 row-start-1 mr-2 size-4 self-center justify-self-end text-gray-500"
+                    />
+                  </div>
+                </div>
+              )}
               {renderCustomAfter('required')}
               {renderCustomAfter('unique')}
               {renderCustomAfter('primaryKey')}
@@ -1017,12 +1208,50 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
       </Disclosure>
       {renderCustomSectionsAfter('constraints')}
 
+      {/* Allowed Values Section (enum, ODCS 3.2.0+) */}
+      {hasEnumValues && (
+        <Disclosure>
+          {({ open }) => (
+            <>
+              <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
+                <SectionLabel label={t('diagram.section.enumValues')} count={sectionCounts.enumValues} />
+                <ChevronRightIcon
+                  className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
+                />
+              </DisclosureButton>
+              <DisclosurePanel className="px-2 pt-2 pb-1 text-xs text-gray-500 space-y-2">
+                <EnumValuesEditor value={property.enum} onChange={(value) => updateField('enum', value)} />
+              </DisclosurePanel>
+            </>
+          )}
+        </Disclosure>
+      )}
+
+      {/* Synonyms Section (ODCS 3.2.0+) */}
+      {hasSynonyms && (
+        <Disclosure>
+          {({ open }) => (
+            <>
+              <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
+                <SectionLabel label={t('diagram.section.synonyms')} count={sectionCounts.synonyms} />
+                <ChevronRightIcon
+                  className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
+                />
+              </DisclosureButton>
+              <DisclosurePanel className="px-2 pt-2 pb-1 text-xs text-gray-500 space-y-2">
+                <SynonymsEditor value={property.synonyms} onChange={(value) => updateField('synonyms', value)} />
+              </DisclosurePanel>
+            </>
+          )}
+        </Disclosure>
+      )}
+
       {/* Classification & Security Section */}
       <Disclosure>
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.classificationSecurity')}</span>
+              <SectionLabel label={t('diagram.section.classificationSecurity')} count={sectionCounts.classificationSecurity} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -1065,6 +1294,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                     tooltip={classificationOverride?.description}
                     placeholder={definitionData?.classification || classificationOverride?.placeholder || "e.g., confidential, public, internal"}
                     placeholderClassName={definitionData?.classification && !property.classification ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                    inheritedValue={definitionData?.classification}
                     pattern={classificationOverride?.pattern}
                     patternMessage={classificationOverride?.patternMessage}
                     minLength={classificationOverride?.minLength}
@@ -1113,6 +1343,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
                   tooltip={encryptedNameOverride?.description}
                   placeholder={definitionData?.encryptedName || encryptedNameOverride?.placeholder || "Encrypted field reference"}
                   placeholderClassName={definitionData?.encryptedName && !property.encryptedName ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                  inheritedValue={definitionData?.encryptedName}
                   pattern={encryptedNameOverride?.pattern}
                   patternMessage={encryptedNameOverride?.patternMessage}
                   minLength={encryptedNameOverride?.minLength}
@@ -1137,12 +1368,13 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
       </Disclosure>
       {renderCustomSectionsAfter('classificationAndSecurity')}
 
-      {/* Transformations Section */}
+      {/* Transformations Section — omitted once every field in it is hidden and nothing is anchored into it */}
+      {!isTransformationsSectionEmpty && (
       <Disclosure>
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.transformations')}</span>
+              <SectionLabel label={t('diagram.section.transformations')} count={sectionCounts.transformations} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -1163,15 +1395,21 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
               {/* Transform Logic */}
               {!isTransformLogicHidden && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.transformLogic.label')}</label>
-                  <textarea
+                  <ValidatedTextarea
+                    name="property-transform-logic"
+                    label={transformLogicOverride?.title || t('diagram.field.transformLogic.label')}
                     value={property.transformLogic || ''}
                     onChange={(e) => updateField('transformLogic', e.target.value || undefined)}
+                    required={transformLogicOverride?.required ?? false}
+                    placeholder={definitionData?.transformLogic || transformLogicOverride?.placeholder || t('diagram.field.transformLogic.placeholder')}
+                    placeholderClassName={definitionData?.transformLogic && !property.transformLogic ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                    inheritedValue={definitionData?.transformLogic}
+                    minLength={transformLogicOverride?.minLength}
+                    maxLength={transformLogicOverride?.maxLength}
                     rows={4}
-                    className={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm font-mono ${definitionData?.transformLogic && !property.transformLogic ? 'placeholder:text-blue-400' : ''}`}
-                    placeholder={definitionData?.transformLogic || t('diagram.field.transformLogic.placeholder')}
+                    className="font-mono"
                   />
-                  <p className="mt-1 text-xs text-gray-500">{t('diagram.field.transformLogic.help')}</p>
+                  <p className="mt-1 text-xs text-gray-500">{transformLogicOverride?.description || t('diagram.field.transformLogic.help')}</p>
                 </div>
               )}
               {renderCustomAfter('transformLogic')}
@@ -1179,15 +1417,20 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
               {/* Transform Description */}
               {!isTransformDescriptionHidden && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">{t('diagram.field.transformDescription.label')}</label>
-                  <textarea
+                  <ValidatedTextarea
+                    name="property-transform-description"
+                    label={transformDescriptionOverride?.title || t('diagram.field.transformDescription.label')}
                     value={property.transformDescription || ''}
                     onChange={(e) => updateField('transformDescription', e.target.value || undefined)}
+                    required={transformDescriptionOverride?.required ?? false}
+                    placeholder={definitionData?.transformDescription || transformDescriptionOverride?.placeholder || t('diagram.field.transformDescription.placeholder')}
+                    placeholderClassName={definitionData?.transformDescription && !property.transformDescription ? 'placeholder:text-blue-400' : 'placeholder:text-gray-400'}
+                    inheritedValue={definitionData?.transformDescription}
+                    minLength={transformDescriptionOverride?.minLength}
+                    maxLength={transformDescriptionOverride?.maxLength}
                     rows={3}
-                    className={`w-full rounded border border-gray-300 bg-white px-2 py-1 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs ${definitionData?.transformDescription && !property.transformDescription ? 'placeholder:text-blue-400' : ''}`}
-                    placeholder={definitionData?.transformDescription || t('diagram.field.transformDescription.placeholder')}
                   />
-                  <p className="mt-1 text-xs text-gray-500">{t('diagram.field.transformDescription.help')}</p>
+                  <p className="mt-1 text-xs text-gray-500">{transformDescriptionOverride?.description || t('diagram.field.transformDescription.help')}</p>
                 </div>
               )}
               {renderCustomAfter('transformDescription')}
@@ -1195,6 +1438,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
           </>
         )}
       </Disclosure>
+      )}
       {renderCustomSectionsAfter('transformations')}
 
       {/* Data Quality Section */}
@@ -1202,7 +1446,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.dataQuality')}</span>
+              <SectionLabel label={t('diagram.section.dataQuality')} count={sectionCounts.dataQuality} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -1224,7 +1468,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.authoritativeDefinitions')}</span>
+              <SectionLabel label={t('diagram.section.authoritativeDefinitions')} count={sectionCounts.authoritativeDefinitions} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />
@@ -1257,7 +1501,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
           {({ open }) => (
             <>
               <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-                <span>{t('diagram.section.relationships')}</span>
+                <SectionLabel label={t('diagram.section.relationships')} count={sectionCounts.relationships} />
                 <ChevronRightIcon
                   className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
                 />
@@ -1310,7 +1554,7 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         {({ open }) => (
           <>
             <DisclosureButton className="flex w-full items-center justify-between rounded bg-gray-50 px-2 py-1 text-left text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500/75">
-              <span>{t('diagram.section.customProperties')}</span>
+              <SectionLabel label={t('diagram.section.customProperties')} count={sectionCounts.customProperties} />
               <ChevronRightIcon
                 className={`h-3 w-3 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
               />

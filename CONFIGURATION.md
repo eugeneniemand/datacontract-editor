@@ -49,6 +49,27 @@ docker run -p 4173:4173 \
 | `AI_MODEL` | `gpt-4o` | Model name (provider-specific) |
 | `AI_AUTH_HEADER` | `bearer` | `bearer` or `api-key` (OpenAI only) |
 | `TESTS_SERVER_URL` | - | Data contract test server URL |
+| `CUSTOMIZATION_CONFIG` | - | Path (inside the container) to a `customization.yaml`, see [CUSTOMIZATION.md](CUSTOMIZATION.md) |
+| `SCHEMA_URL` | - | JSON Schema URL the data contract is validated against (instead of the built-in ODCS schemas) |
+| `INITIAL_YAML_FILE` | - | Path (inside the container) to a data contract YAML that new sessions start with |
+| `CONFIG_JSON` | - | Path (inside the container) to your own `config.json`; used as is, and the variables above that go into `config.json` are ignored |
+
+The initial data contract only replaces the built-in example: a browser session that already holds a contract keeps it on reload.
+
+```bash
+# Start with your own data contract, validated against your own schema
+docker run -p 4173:4173 \
+  -v ./acme-orders.odcs.yaml:/config/acme-orders.odcs.yaml \
+  -e INITIAL_YAML_FILE=/config/acme-orders.odcs.yaml \
+  -e SCHEMA_URL=https://example.org/schemas/acme-data-contract-schema.json \
+  datacontract-editor
+
+# Or bring a complete config.json (see the schema below)
+docker run -p 4173:4173 \
+  -v ./config.json:/config/config.json \
+  -e CONFIG_JSON=/config/config.json \
+  datacontract-editor
+```
 
 ### 2. Embed (JavaScript API)
 
@@ -115,8 +136,11 @@ The `authHeader` field controls how the API key is sent. The special value `bear
 tests: {
   enabled: true,                    // Enable test runner
   dataContractCliApiServerUrl: 'https://api.datacontract.com',  // Test server URL
+  timeoutSeconds: 300,              // Give up on a test after this many seconds (default 300)
 }
 ```
+
+A running test can be cancelled at any time with the Cancel button, or with `editor.cancelTest()` when embedded.
 
 ### Full Embed Configuration
 
@@ -127,7 +151,14 @@ init({
 
   // Content
   yaml: '...',                       // Initial YAML content
-  schemaUrl: 'https://...',          // JSON schema URL for validation
+  // The ODCS versions you support, each with the JSON schema a document of that version is
+  // validated against. The default is what new contracts get and what the Migrate action in
+  // Fundamentals offers to documents on an older version. Omit for the built-in default (v3.2.0, with v3.1.0 documents validated against the v3.1.0 schema).
+  odcsVersions: [
+    { version: 'v3.2.0', schema: 'https://.../odcs-json-schema-v3.2.0.json', default: true },
+    { version: 'v3.1.0', schema: 'https://.../odcs-json-schema-v3.1.0.json' },
+  ],
+  schemaUrl: 'https://...',          // Deprecated: a single schema URL; use odcsVersions
 
   // Views
   availableViews: ['yaml', 'form', 'diagram'],
@@ -169,6 +200,17 @@ init({
     productDetailsUrlTemplate: '/dataproducts/{externalId}',   // "open details" target of tree products
     contractDetailsUrlTemplate: '/datacontracts/{externalId}', // "open details" target of tree contracts/schemas/properties
     productUriTemplate: '/dataproducts/{externalId}'           // canonical product URL for lineage URIs (defaults to productDetailsUrlTemplate)
+  },
+  assets: {                          // Assets browse panel
+    url: '/api/server-assets',       // With servers: POST { servers } -> [{ server, type, assets: [{ externalId, name,
+                                     //   type, description, iconUrl, physicalName, properties: [...] }] }]
+    catalogUrl: '/api/assets',       // Without servers: GET (top level), ?parent=<externalId> (children) or
+                                     //   ?query=<text> (search, 3+ characters) -> { assets: [{ ..., hasChildren }], truncated }
+    assetDetailsUrlTemplate: '/assets/{externalId}'            // "open details" target of tree assets
+  },
+
+  autoValues: {                      // Derived values for custom properties with `auto: true`
+    url: '/api/auto-values'          // POST { yaml } -> { properties: { <property>: { values, detail?, warning? } } }
   },
 
   // Advanced
@@ -239,9 +281,13 @@ For Docker deployments, the generated config.json follows this schema:
   "tests": {
     "enabled": true,
     "dataContractCliApiServerUrl": "https://api.datacontract.com"
-  }
+  },
+  "yaml": "apiVersion: v3.2.0\nkind: DataContract\nid: acme-orders\n...",
+  "schemaUrl": "https://example.org/schemas/acme-data-contract-schema.json"
 }
 ```
+
+`yaml` and the schema keys work as in the embed API: `yaml` is the data contract new sessions start with, and `odcsVersions` (or the single, deprecated `schemaUrl`) sets the JSON schemas the contract is validated against. Without `yaml` in `config.json`, a `data-contract.yaml` served next to the app is used (that is what `INITIAL_YAML_FILE` sets up).
 
 ## Examples
 

@@ -1,6 +1,7 @@
 import DescriptionPreview from '../ui/DescriptionPreview.jsx';
 import ContractHeader from './preview/ContractHeader.jsx';
 import FundamentalsSection from './preview/FundamentalsSection.jsx';
+import ContextSection from './preview/ContextSection.jsx';
 import SchemaSection from './preview/SchemaSection.jsx';
 import ServersSection from './preview/ServersSection.jsx';
 import TeamSection from './preview/TeamSection.jsx';
@@ -28,6 +29,10 @@ const DataContractPreview = () => {
 
 					{/* 3. Data Model Section */}
 					<SchemaSection />
+
+					{/* 3b. Context Section (ODCS 3.2.0): guidance for consumers and AI agents, below the
+					    schema as on the Entropy Data contract page */}
+					<ContextSection />
 
 					{/* 4. Servers Section */}
 					<ServersSection />
