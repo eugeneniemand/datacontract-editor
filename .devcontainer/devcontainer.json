@@ -1,0 +1,35 @@
+
+{
+  "name": "Data Contract Editor",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "forwardPorts": [4001, 5173],
+  "portsAttributes": {
+    "4001": {
+      "label": "GitHub Adapter"
+    },
+    "5173": {
+      "label": "Data Contract Editor",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "redhat.vscode-yaml"
+      ]
+    }
+  },
+  "postCreateCommand": "npm install && npm run build && cd examples/github-server && npm install",
+  "postStartCommand": "bash .devcontainer/start-services.sh",
+  "remoteUser": "node",
+  "runArgs": [
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/.env"
+  ]
+}

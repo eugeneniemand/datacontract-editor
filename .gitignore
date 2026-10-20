@@ -37,3 +37,5 @@ docs/api/
 # dev-only runtime config (served as /config.json in dev server only)
 dev-config.json
 docs/superpowers/
+
+*.env
