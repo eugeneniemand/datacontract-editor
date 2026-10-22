@@ -3,6 +3,8 @@ import {useTranslation} from 'react-i18next';
 import {useEditorStore} from '../../store.js';
 import {isSafeKey} from '../../utils/safeProperty.js';
 import {getSchemaEnumValues} from '../../lib/schemaEnumExtractor.js';
+import StableIdField from '../ui/StableIdField.jsx';
+import {useIsStableIdShown} from '../../hooks/useStableId.js';
 import TagsInput from '../ui/TagsInput.jsx';
 import ChevronRightIcon from "../ui/icons/ChevronRightIcon.jsx";
 import PropertyDetailsDrawer from '../ui/PropertyDetailsDrawer.jsx';
@@ -335,6 +337,8 @@ const SchemaEditor = ({schemaIndex}) => {
 		};
 	}, [selectedProperty]);
 
+	const isIdShown = useIsStableIdShown('schema', 'schema');
+
 	const relationshipTypeOptions = useMemo(() => {
 		return getSchemaEnumValues(jsonSchema, 'relationships.type', 'schema') ||
 			['foreignKey', 'references', 'mapsTo'];
@@ -526,6 +530,22 @@ const SchemaEditor = ({schemaIndex}) => {
 												</DisclosureButton>
 												<DisclosurePanel className="px-3 pt-3 pb-2">
 													<div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+														{/* ID Field */}
+														{isIdShown && (
+															<div className="sm:col-span-2">
+																<StableIdField
+																	name={`schema-id-${schemaIndex}`}
+																	definition="schema"
+																	customizationLevel="schema"
+																	value={schema[schemaIndex].id}
+																	onChange={(id) => id
+																		? setValue(`schema[${schemaIndex}].id`, id)
+																		: removeValue(`schema[${schemaIndex}].id`)}
+																	siblingIds={schema.filter((_, i) => i !== schemaIndex).map((s) => s.id).filter(Boolean)}
+																/>
+															</div>
+														)}
+
 														{/* Business Name Field */}
 														{!isBusinessNameHidden && (
 															<ValidatedInput

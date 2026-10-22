@@ -3,11 +3,13 @@ import { Tooltip } from '../components/ui/index.js';
 import QuestionMarkCircleIcon from '../components/ui/icons/QuestionMarkCircleIcon.jsx';
 import {useShallow} from "zustand/react/shallow";
 import {useTranslation} from 'react-i18next';
+import { StableIdAdvancedSection } from '../components/ui/StableIdField.jsx';
 
 const Pricing = () => {
   const { t } = useTranslation();
 	const price = useEditorStore(useShallow((state) => state.getValue('price')));
 	const setValue = useEditorStore(useShallow((state) => state.setValue));
+	const removeValue = useEditorStore(useShallow((state) => state.removeValue));
 
 
   // Update YAML when form fields change
@@ -32,13 +34,16 @@ const Pricing = () => {
 						newPrice.priceAmount = value;
 					}
 				}
+			} else if (value) {
+				newPrice[field] = value;
 			} else {
-				newPrice[field] = value || undefined;
+				// Delete rather than set undefined, so the emptiness check below sees the key is gone
+				delete newPrice[field];
 			}
 
       // Remove price object if empty
       if (Object.keys(newPrice).length === 0) {
-				setValue('price', null);
+				removeValue('price');
 				return;
       }
 
@@ -124,6 +129,13 @@ const Pricing = () => {
                   />
                 </div>
               </div>
+
+              <StableIdAdvancedSection
+                name="priceId"
+                definition="Pricing"
+                value={price?.id}
+                onChange={(id) => updateField('id', id)}
+              />
             </div>
           </div>
         </div>

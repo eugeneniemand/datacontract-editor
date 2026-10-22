@@ -23,6 +23,7 @@ import Tooltip from '../ui/Tooltip.jsx';
 import {SparkleButton} from '../../ai/index.js';
 import {useEditorStore} from '../../store.js';
 import {getSchemaEnumValues} from '../../lib/schemaEnumExtractor.js';
+import {StableIdAdvancedSection} from '../ui/StableIdField.jsx';
 import {useCustomization, useIsPropertyHidden, useStandardPropertyOverride} from '../../hooks/useCustomization.js';
 import {CustomContentAfter, CustomSections, UngroupedCustomProperties} from '../ui/CustomSection.jsx';
 import {DefinitionSelectionModal} from '../ui/DefinitionSelectionModal.jsx';
@@ -51,7 +52,7 @@ const SectionLabel = ({ label, count }) => (
   </span>
 );
 
-const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focusNonce, focusRelationshipTo }) => {
+const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focusNonce, focusRelationshipTo, siblingIds = [] }) => {
   const { t } = useTranslation();
   const relationshipsSectionRef = useRef(null);
   const [relationshipsHighlight, setRelationshipsHighlight] = useState(false);
@@ -1520,6 +1521,16 @@ const PropertyDetailsPanel = ({ property, onUpdate, onDelete, focusSection, focu
         </Disclosure>
       </div>
       {renderCustomSectionsAfter('relationships')}
+
+      {/* Advanced Section */}
+      <StableIdAdvancedSection
+        name="propertyId"
+        definition="property"
+        customizationLevel="schema.properties"
+        value={property.id}
+        onChange={(id) => updateField('id', id)}
+        siblingIds={siblingIds}
+      />
 
       {/* Custom Sections from Customization */}
       <CustomSections
